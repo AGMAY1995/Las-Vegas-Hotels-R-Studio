@@ -1,0 +1,338 @@
+---
+title: "STAT_450_Project"
+author: "Noah Gallagher"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Let us first read in the data and take a look at the variables.
+
+```{r}
+# Reading in data
+vegas <- read.csv('vegas2.csv',sep = ',')
+
+# Looking at variables
+str(vegas)
+```
+
+## Generate Summary Statistics
+
+Here we can dive deeper into the variables and generate some summary statistics.
+
+```{r}
+library(skimr)
+skim(vegas)
+
+#create subset of numeric elements
+numeric_subset<- vegas2%>%
+  select(Nr..reviews, Nr..hotel.reviews, Helpful.votes, Score, Hotel.stars, Nr..rooms, Member.years)
+
+# get col means
+colMeans(numeric_subset)
+```
+
+# Generating Plots
+
+```{r}
+library(gridExtra)
+library(tidyverse)
+# Plotting Hotel Reviews
+hotel_plot = ggplot(vegas, aes(x=Nr..hotel.reviews)) +
+            geom_histogram(bins=15) +
+            labs(x='Reviews', y='count')
+
+#hotel_plot
+
+# Plotting scores
+scores_plot = ggplot(vegas, aes(x=Score)) +
+            geom_histogram(bins=5) +
+            labs(x='Scores', y='count')
+#scores_plot
+
+# Plotting Number of rooms
+rooms_plot = ggplot(vegas, aes(x=Nr..rooms)) +
+            geom_histogram(bins=5) +
+            labs(x='Number of Rooms', y='count')
+#rooms_plot
+
+# Merging
+grid.arrange(hotel_plot, scores_plot, rooms_plot, ncol=2, nrow=2)
+
+# Plotting Pool Presence
+pool_plot = ggplot(vegas, aes(x=Pool)) +
+            geom_bar() +
+            labs(x='Presence of Pool', y='count')
+#pool_plot
+
+# Plotting Gym Presence
+gym_plot = ggplot(vegas, aes(x=Gym)) +
+            geom_bar() +
+            labs(x='Presence of Gym', y='count')
+#gym_plot
+
+# Plotting Spa Presence
+spa_plot = ggplot(vegas, aes(x=Spa)) +
+            geom_bar() +
+            labs(x='Presence of Spa', y='count')
+#spa_plot
+
+# Plotting Tennis Court Presence
+tennis_plot = ggplot(vegas, aes(x=Tennis.court)) +
+            geom_bar() +
+            labs(x='Presence of Tennis Court', y='count')
+#tennis_plot
+
+# Plotting Casino Presence
+casino_plot = ggplot(vegas, aes(x=Casino)) +
+            geom_bar() +
+            labs(x='Presence of Casino', y='count')
+#casino_plot
+
+# Plotting Free Wifi
+wifi_plot = ggplot(vegas, aes(x=Free.internet)) +
+            geom_bar() +
+            labs(x='Presence of Wifi', y='count')
+#wifi_plot
+
+# Merging
+grid.arrange(pool_plot, gym_plot, spa_plot, tennis_plot, casino_plot, wifi_plot, ncol=3, nrow=2)
+```
+
+
+
+
+Questions:
+  1) Can we determine if there is a significant difference between the stars a hotel has and their reviews?
+  
+  Testing: Ho: Mu-Score = Mu-Stars vs. Ha: Mu-Score != Mu-Stars
+```{r}
+table(vegas$Hotel.name)
+attach(vegas)
+Y = cbind(Score, Hotel.stars)
+grp = factor(Hotel.name)
+fit = manova(Y ~ grp)
+summary(fit, test = 'Wilks')
+```
+
+ANOVA test - analysis of individual variables
+```{r}
+# AOV test for Score
+summary(aov(Score ~ grp))
+
+# AOV test for Hotel.stars
+summary(aov(Hotel.stars ~ grp))
+
+# F stat
+g=21
+p=2
+N=504
+alpha=0.05
+qf(1-(alpha)/p, N-g, g-1)
+#F = 2.10
+
+```
+For Hotel Score: We Reject Ho meaning, all hotel ratings differ significantly among the Hotels and there is no correlation between them.
+
+For Hotel Stars: We Reject Ho, meaning all hotel Stars differ significantly among the Hotels.
+
+
+
+  2) Can we determine if there is a significant difference between tourist reviews and USA resident reviews for hotels?
+  
+  Testing: Ho: Mu-Score_tourist = Mu-Score_resident vs. Ha: Mu-Score_tourist != Mu-Score_resident
+```{r}
+# Lets use ANOVA test 
+attach(vegas)
+summary(aov())
+
+
+```
+
+  Sub Question) Can we assess the significance of individual amenities
+```{r}
+# AOV Test for each Amenity
+vegas2<-na.omit(vegas)
+attach(vegas2)
+grp = factor(Hotel.name)
+
+
+# Pool
+summary(aov(Pool ~ grp),success='YES')
+```
+  Sub Question) Is there a difference in Reviews based on what amenities are offered?
+
+
+  3) What is the most popular country that tourists come from?
+```{r}
+country_sums <- vegas%>%
+  group_by(User.country)%>%
+  summarize(count=n())%>%
+  arrange(desc(count))
+country_sums
+```
+We have determined that the most popular country that tourists come from is USA, followed by UK.
+
+  4) What is the highest rated hotel on the Las Vegas Strip?
+```{r}
+highest_rated <- vegas%>%
+  group_by(Hotel.name)%>%
+  summarise(
+    num_reviews = sum(Nr..hotel.reviews),
+    total_score = sum(Score),
+    avg_rating = mean(Score)
+  )%>%
+  arrange(desc(avg_rating))
+highest_rated
+```
+Thus, we can conclude that the Wynn Las Vegas is the highest rated hotel on the Las Vegas Strip.
+
+
+  5) What is the most popular traveler type?
+```{r}
+popular_traveler <- vegas%>%
+  group_by(Traveler.type)%>%
+  summarize(count = n())%>%
+  arrange(desc(count))
+
+popular_traveler
+```
+The most popular traveler type that visit Las Vegas are Couples, followed by families.
+
+## Maybe we can visualize this
+  6) What amenities are normally included for all hotels? 
+  
+  We know that there are 24 records for each Hotel (i.e. 24 reviews by different customers for each hotel). Let 1 = yes, 0 = no.
+  Steps:
+    -We first create a dataset that contains boolean values for each amenity that a hotel offers to its guests.
+    -We then find the number of total hotels in the dataset.
+    -We then find the proportions of amenities that the hotel offers.
+```{r}
+# Lets see what hotels have certain amenities
+normal_amenities <- vegas%>%
+  group_by(Hotel.name)%>%
+  summarize( 
+    pools = sum(Pool == 'YES')/24, #we divide by 24 since there are 24 entries for each hotel
+    gyms = sum(Gym == 'YES')/24,
+    tennis = sum(Tennis.court == 'YES')/24,
+    spas = sum(Spa == 'YES')/24,
+    casinos = sum(Casino == 'YES')/24,
+    wifi = sum(Free.internet == 'YES')/24
+  )
+normal_amenities
+
+# Get the number of hotels in dataset (21 hotels)
+count_hotels <- vegas%>%
+  summarize(num_hotel = length(unique(Hotel.name)))
+count_hotels
+
+# Lets get the proportions of amenities
+hotel_props<- normal_amenities%>%
+  summarize(
+    prop_pools = sum(pools) / 21,
+    prop_gym = sum(gyms) / 21,
+    prop_tennis = sum(tennis) / 21,
+    prop_spas = sum(spas) / 21,
+    prop_casinos = sum(casinos) / 21,
+    prop_wifi = sum(wifi) / 21
+  )
+
+hotel_props
+```
+Thus we can conclude:
+  - 95.24% of hotels have Pools
+  - 95.24% of hotels have Gyms
+  - 23.81% of hotels have Tennis Courts
+  - 76.19% of hotels have Spas
+  - 90.48% of hotels have Casinos
+  - 95.24% of hotels have Free Internet
+  
+## Correlation Between Hotel Reviews and Stars
+
+```{r}
+vegas2<- vegas%>%
+  mutate(
+    Hotel.stars = as.numeric(Hotel.stars),
+    Score = as.numeric(Score)
+  )
+# Removing NA's
+vegas2<-na.omit(vegas)
+
+attach(vegas2)
+
+# Correlation
+cor(Score, Hotel.stars)
+
+# Fitting a line to Score and Stars
+ggplot(vegas2, aes(x = Score, y = Hotel.stars))+
+  geom_point(shape = 1) +
+  geom_smooth(method = lm) +
+  geom_jitter(shape = 1)
+
+```
+  The Correlation is a weak positive correlation.
+  
+## Scatter Plot Matrix for Score and Stars
+```{r}
+subset <- vegas2%>%
+  select(Score, Hotel.stars)
+
+pairs(subset, lower.panel = NULL)
+
+
+# check proportion of points within the prediction ellipse
+S = cov(subset)
+xbar = colMeans(subset)
+D2 = mahalanobis(subset, xbar, S)
+p = ncol(subset)
+#qchisq(.95, p)
+
+sum(D2 <= qchisq(.95, p))/nrow(subset)
+```
+The proportion of points within the prediction ellipse is 96.23%
+
+
+## Correlation between all numeric variables
+
+```{r}
+numeric_subset<- vegas2%>%
+  select(Nr..reviews, Nr..hotel.reviews, Helpful.votes, Score, Hotel.stars, Nr..rooms, Member.years)
+
+cor(numeric_subset)
+pairs(numeric_subset)
+cov(numeric_subset)
+colMeans(numeric_subset)
+
+```
+
+## Most Frequent Period of Stay
+
+```{r}
+period_stay <-vegas%>%
+  select(Period.of.stay)%>%
+  group_by(Period.of.stay)%>%
+  summarize(
+    num_guests = n()
+  )%>%
+  arrange(desc(num_guests))
+period_stay
+```
+We can conclude that most guests decide to vists Vegas between the months of March to May.
+
+## Is there a correlation between the Period of Stay and the Traveler Type?
+
+```{r}
+
+
+
+
+#Couples	214			
+#Families + Friends = 110	+ 82 = 	192
+#Business	74			
+#Solo	24	
+```
